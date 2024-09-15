@@ -5,34 +5,67 @@ import { useForm } from "react-hook-form";
 import { Form } from "@/components/ui/form";
 import { useRouter } from "next/navigation";
 
-import { UserFormValidation } from "@/lib/validation";
+import { CreateAppointmentSchema } from "@/lib/validation";
 import CustomFormField from "../custom-form-field";
 import SubmitButton from "../submit-button";
 import { createUser } from "@/lib/actions/patients.actions";
 import { SelectItem } from "../ui/select";
 import Image from "next/image";
 import { Doctors } from "@/constants";
+import { createAppointment } from "@/lib/actions/appointment.actions";
 
-export default function AppointmentForm({ patientId, userId, type }) {
+export default function AppointmentForm({
+  patientId,
+  userId,
+  type = "create",
+}) {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const form = useForm({
-    resolver: zodResolver(UserFormValidation),
+    resolver: zodResolver(CreateAppointmentSchema),
     defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
+      primaryPhysician: "",
+      schedule: new Date(),
+      reason: "",
+      note: "",
+      cancellationReason: "",
     },
   });
 
-  async function onSubmit({ name, email, phone }) {
-    console.log(name, email, phone);
+  async function onSubmit(values) {
     setIsLoading(true);
 
+    let status;
+    switch (type) {
+      case "schedule":
+        status = "scheduled";
+        break;
+      case "cancel":
+        status = "cancelled";
+        break;
+      default:
+        status = "pending";
+    }
+
     try {
-      const userData = { name, email, phone };
-      const user = await createUser(userData);
-      if (user) router.push(`/patients/${user.$id}/register`);
+      if (type === "create" && patientId) {
+        const appointmentData = {
+          userId,
+          patient: patientId,
+          primaryPhysician: values.primaryPhysician,
+          schedule: new Date(values.schedule),
+          reason: values.reason,
+          note: values.note,
+          status: status,
+        };
+        const appointment = await createAppointment(appointmentData);
+
+        if (appointment) {
+          router.push(
+            `/patients/${userId}/new-appointment/success?appointmentId=${appointment.$id}`
+          );
+        }
+      }
     } catch (error) {
       console.log(error);
     } finally {
@@ -94,6 +127,7 @@ export default function AppointmentForm({ patientId, userId, type }) {
               showTimeSelect
               dateFormat="MM/dd/yyy - h:mm aa"
               placeholder="Select your appointment date"
+              label="Expected appointment date"
             />
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <CustomFormField
@@ -105,7 +139,7 @@ export default function AppointmentForm({ patientId, userId, type }) {
               />
               <CustomFormField
                 control={form.control}
-                name="notes"
+                name="note"
                 label="Additional comments/notes"
                 type="textarea"
                 placeholder="ex: Prefer afternoon appointments, if possible"
